@@ -15,9 +15,8 @@ runProgram();
 
 function runProgram() {
     program.version('1.0.0')
-        .option('-c, --create', 'Create game')
         .option('-j, --join <value>', 'join game')
-        .option('-n, --name [value]', 'name')
+        .option('-n, --name <value>', 'name')
         .option('-u, --update <value>', 'The account to update')
         .option('-m, --main-net', 'Use Main Net instead of Test Net')
         .parse(process.argv);
@@ -39,14 +38,7 @@ function runProgram() {
     dbh.auth(redisPassword, function (err) {
         if (err) console.log(err);
         else {
-            if (program.create) {
-                //var threshold = program.create;
-                joinGame(null, testNet).finally(function () {
-                    console.log("Created.");
-                    dbh.quit();
-                });
-            }
-            else if (program.join) {
+            if (program.join) {
                 var gameName = program.join;
                 var playerName = program.name;
                 joinGame(gameName, playerName).finally(function () {
@@ -63,6 +55,7 @@ function runProgram() {
             }
             else {
                 console.log("WHAT DO YOU WANT!!!!");
+                dbh.quit();
             }
         }
     });
