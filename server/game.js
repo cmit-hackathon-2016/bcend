@@ -16,7 +16,7 @@ runProgram();
 function runProgram() {
     program.version('1.0.0')
         .option('-j, --join <value>', 'join game')
-        .option('-n, --name <value>', 'name')
+        .option('-n, --nick <value>', 'nick name')
         .option('-u, --update <value>', 'The account to update')
         .option('-m, --main-net', 'Use Main Net instead of Test Net')
         .parse(process.argv);
@@ -40,7 +40,7 @@ function runProgram() {
         else {
             if (program.join) {
                 var gameName = program.join;
-                var playerName = program.name;
+                var playerName = program.nick;
                 joinGame(gameName, playerName).finally(function () {
                     console.log("Done.");
                     dbh.quit();
