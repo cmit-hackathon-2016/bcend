@@ -33,7 +33,7 @@ function login() {
 function runProgram() {
     program.version('1.0.0')
         .option('-j, --join <value>', 'join game')
-        .option('-n, --name <value>', 'name')
+        .option('-n, --nick <value>', 'nick name')
         .option('-u, --update <value>', 'The account to update')
         .option('-m, --main-net', 'Use Main Net instead of Test Net')
         .parse(process.argv);
@@ -57,7 +57,7 @@ function runProgram() {
         else {
             if (program.join) {
                 var gameName = program.join;
-                var playerName = program.name;
+                var playerName = program.nick;
                 joinGame(gameName, playerName).finally(function () {
                     console.log("Done.");
                     dbh.quit();
@@ -97,45 +97,50 @@ function update(gameName) {
                             playerObject = JSON.parse(playerObject);
                             if (!playerObject.address) {
                                 joinGame(gameName, playerObject.name).then(function () {
+                                    console.log("joined by update " + playerObject.name);
                                     playerObject.amount = 0;
-                                    savePlayerObj(playerObject).then(d2.resolve, d2.reject);
-                                }, d2.reject);
+                                    updateBalanceAndResolve(playerObject);
+                                }, d2.reject); 
                             }
                             else {
-                                console.log(playerObject.name + " is fully joined.");
-                                playerObject.amount = -1;
-                                btclient.getReceivedByAddress(playerObject.address, 0, function (error, resAmount) {
-                                    console.log(error);
-                                    if(!error) {
-                                        playerObject.amount = resAmount;
-                                        console.log("has "+ resAmount);
-                                        savePlayerObj(playerObject).then(d2.resolve, d2.reject);    
-                                    }
-                                    else d2.reject();
-                                });
-                            }
-                            
-                            function savePlayerObj(playerObject) {
-                                var deferred = Q.defer();
-                                dbh.set( 'players:' + playerObject.name, JSON.stringify(playerObject), function (err) {
-                                    if (err) {
-                                        deferred.reject(err);
-                                    }
-                                    else {
-                                        deferred.resolve();
-                                    }
-                                });
-                                return deferred.promise;
+                                updateBalanceAndResolve(playerObject);
                             }
                         }
                     }
                     else d2.reject();
+                    
+                    function updateBalanceAndResolve(playerObject) {
+                        console.log(playerObject.name + " is fully joined.");
+                        playerObject.amount = -1;
+                        btclient.getReceivedByAddress(playerObject.address, 0, function (error, resAmount) {
+                            if ("getReceivedByAddress ", error) console.log(error);
+                            if(!error) {
+                                playerObject.amount = resAmount;
+                                console.log(playerObject.name + " has "+ resAmount);
+                                savePlayerObj(playerObject).then(d2.resolve, d2.reject);
+                            }
+                            else d2.reject();
+                        });
+                    }
                 }})(d2));
             }
             
             Q.all(qs).then(deferred.resolve, deferred.reject);
         }
     });
+
+    function savePlayerObj(playerObject) {
+        var deferred2 = Q.defer();
+        dbh.set( 'players:' + playerObject.name, JSON.stringify(playerObject), function (err) {
+            if (err) {
+                deferred2.reject(err);
+            }
+            else {
+                deferred2.resolve();
+            }
+        });
+        return deferred2.promise;
+    }
     
     function onResponse(error) {
         if (error) {
@@ -168,27 +173,18 @@ function joinGame(gameName, playerName) {
             btclient.getNewAddress(account, function (err, newAddressForPlayer) {
                 if (err) onError(err);
                 else {
-                    
                     // add player
                     dbh.sadd('players', playerName, function (err) {
                         if (err) onError(err);
                         else {
-
-                            // add player
-                            dbh.sadd('players', playerName, function (err) {
+                            dbh.set('players:' + playerName, JSON.stringify({
+                                name: playerName,
+                                address: newAddressForPlayer,
+                            }), function (err) {
                                 if (err) onError(err);
                                 else {
-                                    dbh.set('players:' + playerName, JSON.stringify({
-                                        name: playerName,
-                                        address: newAddressForPlayer,
-                                    }), function (err) {
-                                        if (err) onError(err);
-                                        else {
-                                            console.log(playerName + " joined game " + gameName);
-                                            deferred.resolve();
-                                        }
-                                    });
-                                    
+                                    console.log(playerName + " joined game " + gameName);
+                                    deferred.resolve();
                                 }
                             });
                             
