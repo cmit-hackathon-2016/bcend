@@ -79,12 +79,36 @@ function update(gameName) {
                         if (playerObject) {
                             playerObject = JSON.parse(playerObject);
                             if (!playerObject.address) {
-                                var p = joinGame(gameName, playerObject.name);
-                                p.then(d2.resolve, d2.reject);
+                                joinGame(gameName, playerObject.name).then(function () {
+                                    playerObject.amount = 0;
+                                    savePlayerObj(playerObject).then(d2.resolve, d2.reject);
+                                }, d2.reject);
                             }
                             else {
                                 console.log(playerObject.name + " is fully joined.");
-                                d2.resolve();
+                                playerObject.amount = -1;
+                                btclient.getReceivedByAddress(playerObject.address, 0, function (error, resAmount) {
+                                    console.log(error);
+                                    if(!error) {
+                                        playerObject.amount = resAmount;
+                                        console.log("has "+ resAmount);
+                                        savePlayerObj(playerObject).then(d2.resolve, d2.reject);    
+                                    }
+                                    else d2.reject();
+                                });
+                            }
+                            
+                            function savePlayerObj(playerObject) {
+                                var deferred = Q.defer();
+                                dbh.set( 'players:' + playerObject.name, JSON.stringify(playerObject), function (err) {
+                                    if (err) {
+                                        deferred.reject(err);
+                                    }
+                                    else {
+                                        deferred.resolve();
+                                    }
+                                });
+                                return deferred.promise;
                             }
                         }
                     }
