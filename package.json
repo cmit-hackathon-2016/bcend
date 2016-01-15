@@ -7,7 +7,9 @@
     "bitcoin": "^3.0.1",
     "bitcoinjs-lib": "^2.1.4",
     "coinkey": "^1.4.0",
-    "commander": "^2.9.0"
+    "commander": "^2.9.0",
+    "q": "^1.4.1",
+    "redis": "^2.4.2"
   },
   "devDependencies": {},
   "scripts": {
