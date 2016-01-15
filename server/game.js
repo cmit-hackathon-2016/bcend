@@ -1,6 +1,7 @@
 var bitcoin = require('bitcoin');
 var program = require("commander");
 var redis = require("redis");
+var Q = require("q");
 
 var dbh = null;
 var btclient = null;
@@ -14,9 +15,11 @@ runProgram();
 
 function runProgram() {
     program.version('1.0.0')
-        .option('-c, --create <n>', 'Create game, with threshold', parseFloat)
+        .option('-c, --create', 'Create game')
+        .option('-j, --join <value>', 'join game')
+        .option('-n, --name [value]', 'name')
         .option('-u, --update <value>', 'The account to update')
-        //.option('-m, --main-net', 'Use Main Net instead of Test Net')
+        .option('-m, --main-net', 'Use Main Net instead of Test Net')
         .parse(process.argv);
 
     var testNet = !program.mainNet;
@@ -37,12 +40,26 @@ function runProgram() {
         if (err) console.log(err);
         else {
             if (program.create) {
-                var threshold = program.create;
-                startGame(threshold, testNet);
+                //var threshold = program.create;
+                joinGame(null, testNet).finally(function () {
+                    console.log("Created.");
+                    dbh.quit();
+                });
+            }
+            else if (program.join) {
+                var gameName = program.join;
+                var playerName = program.name;
+                joinGame(gameName, playerName).finally(function () {
+                    console.log("Done.");
+                    dbh.quit();
+                });
             }
             else if (program.update) {
                 var account = program.update;
-                update(account);
+                update(account).finally(function () {
+                    console.log("Update done.");
+                    dbh.quit();
+                });
             }
             else {
                 console.log("WHAT DO YOU WANT!!!!");
@@ -52,73 +69,123 @@ function runProgram() {
     
 }
 
-
-function update(account) {
+function update(gameName) {
+    var deferred = Q.defer();
+    // for each player
+        // if address is not present, join game
     
-    // this is a pyramid of doom :) Don't attempt to understand it.
-    
-    btclient.listReceivedByAddress(0, false, function(err, result) {
-        if (err) return console.log(err);
-        else {
-            
-            dbh.get("target_address", function (err, gameAddressResult) {
-                if (err) console.log(err);
-                else {
-                    console.log("gameaddr " + gameAddressResult);
-
-                    // here goes
-    
-                    for (var i = 0; i < result.length; i++) {
-                        var row = result[i];
-                        var address = row.address;
-                        if (address == gameAddressResult) {
-                            console.log(i, address);
-                            var addressPayMap = {};
-    
-                            for (var j = 0; j < row.txids.length; j++) {
-                                var txid = row.txids[j];
-                                btclient.getTransaction(txid, function(err, txDetailsResult) {
-                                    console.log(txDetailsResult)
-                                    if (err) console.log(err);
-                                    else {
-                                        for (var k = 0; k < txDetailsResult.details.length; k++) {
-                                            var tx = txDetailsResult.details[k];
-                                            if (tx.category == "send") {
-                                                if (!addressPayMap[tx.address]) {
-                                                    addressPayMap[tx.address] = 0;    
-                                                }
-                                                addressPayMap[tx.address] += tx.amount;
-                                            }  
-                                        }
-                                        console.log("Result after processing tx:");
-                                        console.log(addressPayMap);
-                                    }
-                                });
-                            }
-                            
-                            
+    dbh.smembers("players", function(error, playersSet){
+        if (onResponse(error)) {
+            var qs = [];
+            for (var i = 0; i < playersSet.length; i++) {
+                var playerKey = playersSet[i];
+                var d2 = Q.defer();
+                qs.push(d2.promise);
+                dbh.get("players:"+playerKey, (function(d2){return function (error, playerObject) { // NOTE im immediately binding d2 to the context of the function
+                    if (onResponse(error)) {
+                        if (playerObject) {
+                            playerObject = JSON.parse(playerObject);
+                            var p = joinGame(gameName, playerObject.name);
+                            p.then(d2.resolve, d2.reject);
                         }
                     }
+                    else d2.reject();
+                }})(d2));
+            }
+            
+            Q.all(qs).then(deferred.resolve, deferred.reject);
+        }
+    });
+    
+    function onResponse(error) {
+        if (error) {
+            console.log(error);
+            deferred.reject();
+        }
+        return !error;
+    }
+    
+    return deferred.promise;
+}
+
+function joinGame(gameName, playerName) {
+    var deferred = Q.defer();
+    
+    var account = gameName || "game_" + (new Date().getTime());
+    if (!gameName) {
+        console.log("new game name: "+account);
+    }
+    
+    // pyramid of doom ahead :)
+    
+    //create account
+    btclient.getAccountAddress(account, function(err, firstAddress) {
+        if (err) return console.log(err);
+        else {
+                   
+            // game exists, now add a player
+            
+            btclient.getNewAddress(account, function (err, newAddressForPlayer) {
+                if (err) onError(err);
+                else {
                     
-                    dbh.quit();
-                }
+                    // add player
+                    dbh.sadd('players', playerName, function (err) {
+                        if (err) onError(err);
+                        else {
+
+                            // add player
+                            dbh.sadd('players', playerName, function (err) {
+                                if (err) onError(err);
+                                else {
+                                    dbh.set('players:' + playerName, JSON.stringify({
+                                        name: playerName,
+                                        address: newAddressForPlayer,
+                                    }), function (err) {
+                                        if (err) onError(err);
+                                        else {
+                                            console.log(playerName + " joined game " + gameName);
+                                            deferred.resolve();
+                                        }
+                                    });
+                                    
+                                }
+                            });
+                            
+                        }
+                    });
+                }       
             });
         }
     });
+
+    function onError(error) {
+        console.log(error);
+        deferred.reject();
+    }
+    
+    return deferred.promise;
 }
+
 
 function startGame(threshold, testNet) {
     console.log("Starting game. Threshold: " + threshold);
-    
+
     var account = "game_" + (new Date().getTime());
-     //create account
+    
+    // create account
+    var firstAddress = btclient.getAccountAddress(account);
+
+    dbh.set("game_address", gameAddress, redis.print);
+    
+    //create account
     btclient.getAccountAddress(account, function(err, gameAddress){
         if (err) return console.log(err);
         else {
             console.log("Account: " + account);
             console.log("Address: " + gameAddress);
             
-            dbh.set("target_address", gameAddress, redis.print);
+            dbh.set("game_address", gameAddress, redis.print);
             dbh.set("threshold", threshold, redis.print);
             dbh.quit();
         }        
