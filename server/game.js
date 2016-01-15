@@ -8,10 +8,27 @@ var btclient = null;
 var redisPassword = "n9ip3fwvWOwzu4wi";
 var redisDsn = "redis:pub-redis-17864.dal-05.1.sl.garantiadata.com:17864";
 
-runProgram();
-
+//runProgram();
 
 //commands:
+
+function login() {
+    btclient = new bitcoin.Client({
+        host: '127.0.0.1',
+        port: 8332,
+        user: 'username',
+        pass: 'jsdjalsdjlkasjdlkasjdlajslkdjsaldjksjdlasjdlajsdlajsldkjasldjlkasjlkdjl1jj1j1j1j!!',
+        timeout: 20000
+    });
+
+    dbh = redis.createClient(redisDsn);
+    dbh.on("error", function (err) {
+        console.log("Error " + err);
+    });
+    dbh.auth(redisPassword, function (err) {
+        if (err) console.log(err);
+    });
+}
 
 function runProgram() {
     program.version('1.0.0')
@@ -190,5 +207,8 @@ function joinGame(gameName, playerName) {
     return deferred.promise;
 }
 
-
-
+module.exports = {
+    login: login,
+    update: update,
+    joinGame: joinGame
+};
