@@ -6,4 +6,4 @@ function run() {
 }
 
 game.login();
-setInterval(run, 1000);
+setInterval(run, 2000);
