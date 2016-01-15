@@ -168,28 +168,4 @@ function joinGame(gameName, playerName) {
 }
 
 
-function startGame(threshold, testNet) {
-    console.log("Starting game. Threshold: " + threshold);
-
-    var account = "game_" + (new Date().getTime());
-    
-    // create account
-    var firstAddress = btclient.getAccountAddress(account);
-
-    dbh.set("game_address", gameAddress, redis.print);
-    
-    //create account
-    btclient.getAccountAddress(account, function(err, gameAddress){
-        if (err) return console.log(err);
-        else {
-            console.log("Account: " + account);
-            console.log("Address: " + gameAddress);
-            
-            dbh.set("game_address", gameAddress, redis.print);
-            dbh.set("threshold", threshold, redis.print);
-            dbh.quit();
-        }        
-    });
-}
-
 
