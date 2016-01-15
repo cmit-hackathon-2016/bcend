@@ -78,8 +78,14 @@ function update(gameName) {
                     if (onResponse(error)) {
                         if (playerObject) {
                             playerObject = JSON.parse(playerObject);
-                            var p = joinGame(gameName, playerObject.name);
-                            p.then(d2.resolve, d2.reject);
+                            if (!playerObject.address) {
+                                var p = joinGame(gameName, playerObject.name);
+                                p.then(d2.resolve, d2.reject);
+                            }
+                            else {
+                                console.log(playerObject.name + " is fully joined.");
+                                d2.resolve();
+                            }
                         }
                     }
                     else d2.reject();
